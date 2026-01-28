@@ -116,8 +116,14 @@ class GADTR(nn.Module):
         boxes_flat.requires_grad = False
         boxes_idx_flat.requires_grad = False
 
+        rois = torch.cat([
+            boxes_idx_flat[:, None],  # [N, 1]
+            boxes_flat  # [N, 4]
+        ], dim=1)
+
         # extract actor features
-        actor_features = self.roi_align(features, boxes_flat, boxes_idx_flat)
+        # actor_features = self.roi_align(features, boxes_flat, boxes_idx_flat)
+        actor_features = self.roi_align(features, rois)
         actor_features = torch.reshape(actor_features, (bs * t * n, -1))
         actor_features = self.fc_emb(actor_features)
         actor_features = F.relu(actor_features)
