@@ -19,13 +19,15 @@ import util.logger as loggers
 from dataloader.dataloader import read_dataset
 import evaluation.cafe_eval as evaluation
 
+from torch.utils.tensorboard import SummaryWriter
+
 parser = argparse.ArgumentParser(description='Group Activity Detection train code', add_help=False)
 
 # Dataset specification
 parser.add_argument('--dataset', default='cafe', type=str, help='dataset name')
 parser.add_argument('--val_mode', action='store_true')
 parser.add_argument('--split', default='place', type=str, help='dataset split. place or view')
-parser.add_argument('--data_path', default='../Dataset/', type=str, help='data path')
+parser.add_argument('--data_path', default='/media/jiqqi/OS/dataset/Cafe_Dataset/Dataset/', type=str, help='data path')
 parser.add_argument('--image_width', default=1280, type=int, help='Image width to resize')
 parser.add_argument('--image_height', default=720, type=int, help='Image height to resize')
 parser.add_argument('--random_sampling', action='store_true', help='random sampling strategy')
@@ -99,10 +101,15 @@ parser.add_argument('--model_path', default="", type=str, help='pretrained model
 parser.add_argument('--result_path', default="./outputs/")
 
 # Evaluation
-parser.add_argument('--groundtruth', default='./evaluation/gt_tracks.txt', type=argparse.FileType("r"))
+parser.add_argument('--groundtruth', default='/media/jiqqi/OS/dataset/Cafe_Dataset/evaluation/gt_tracks.txt', type=argparse.FileType("r"))
 parser.add_argument('--labelmap', default='./label_map/group_action_list.pbtxt', type=argparse.FileType("r"))
 parser.add_argument('--giou_thresh', default=1.0, type=float)
 parser.add_argument('--eval_type', default="gt_base", type=str, help='gt_based or detection_based')
+
+parser.add_argument('--save_dir', default='output_dir/test',
+                    help='path where to save, empty for no saving')
+parser.add_argument('--runs_dir', default='runs/test',
+                    help='path where to save, empty for no saving')
 
 args = parser.parse_args()
 path = None
@@ -115,12 +122,16 @@ ACTIVITIES = ['Queueing', 'Ordering', 'Drinking', 'Working', 'Fighting', 'Selfie
 def main():
     global args, path
 
+    writer = SummaryWriter(log_dir=args.runs_dir)
+
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = args.device
 
     time_str = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())
     exp_name = '[%s]_GAD_<%s>' % (args.dataset, time_str)
-    save_path = './result/%s' % exp_name
+    save_path = args.save_dir
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
 
     # set random seed
     random.seed(args.random_seed)
@@ -182,7 +193,7 @@ def main():
     # training phase
     for epoch in range(start_epoch, args.epochs + 1):
         print_log(save_path, '----- %s at epoch #%d' % ("Train", epoch))
-        train_log = train(train_loader, model, criterion, optimizer, epoch)
+        train_log = train(train_loader, model, criterion, optimizer, epoch, writer)
         print_log(save_path, 'Loss: %.4f' % (train_log['loss']))
         print_log(save_path, 'Group class error: %.2f' % (train_log['group_class_error']))
         print('Current learning rate is %f' % scheduler.get_last_lr()[0])
@@ -190,7 +201,7 @@ def main():
 
         if epoch % args.test_freq == 0:
             print_log(save_path, '----- %s at epoch #%d' % ("Test", epoch))
-            test_log, result = validate(test_loader, model, criterion, metrics, epoch)
+            test_log, result = validate(test_loader, model, criterion, metrics, epoch, writer)
             print_log(save_path, 'Loss: %.4f' % (test_log['loss']))
             print_log(save_path, 'Group class error: %.2f' % (test_log['group_class_error']))
             print_log(save_path, "group mAP at 1.0: %.2f" % result['group_mAP_1.0'])
@@ -203,11 +214,17 @@ def main():
                 'optimizer': optimizer.state_dict(),
                 'scheduler': scheduler.state_dict(),
             }
+
+            if writer is not None:
+                for k, v in test_log.items():
+                    if isinstance(v, (int, float)):
+                        writer.add_scalar(f"Test/{k}", v, epoch)
+
             result_path = save_path + '/epoch%d.pth' % epoch
             torch.save(state, result_path)
 
 
-def train(train_loader, model, criterion, optimizer, epoch):
+def train(train_loader, model, criterion, optimizer, epoch, writer):
     model.train()
     criterion.train()
 
@@ -262,6 +279,19 @@ def train(train_loader, model, criterion, optimizer, epoch):
         metric_logger.update(group_class_error=loss_dict_reduced['group_class_error'])
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
 
+        if writer is not None:
+            global_step = epoch * print_freq + i
+            writer.add_scalar('Loss/total', loss_value, global_step)
+
+            for k, v in loss_dict_reduced_scaled.items():
+                writer.add_scalar(f'Loss_scaled/{k}', v, global_step)
+
+            for k, v in loss_dict_reduced_unscaled.items():
+                writer.add_scalar(f'Loss_unscaled/{k}', v, global_step)
+
+            writer.add_scalar('Error/group_class_error', loss_dict_reduced['group_class_error'], global_step)
+            writer.add_scalar('LR', optimizer.param_groups[0]["lr"], global_step)
+
     metric_logger.synchronize_between_processes()
     print("Averaged stats:", metric_logger)
 
@@ -269,7 +299,7 @@ def train(train_loader, model, criterion, optimizer, epoch):
 
 
 @torch.no_grad()
-def validate(test_loader, model, criterion, metrics, epoch):
+def validate(test_loader, model, criterion, metrics, epoch, writer):
     model.eval()
     criterion.eval()
 
@@ -305,6 +335,8 @@ def validate(test_loader, model, criterion, metrics, epoch):
                              **loss_dict_reduced_unscaled)
 
         metric_logger.update(group_class_error=loss_dict_reduced['group_class_error'])
+
+
 
         make_txt(boxes, infos, outputs, name_to_vid, file_path)
 

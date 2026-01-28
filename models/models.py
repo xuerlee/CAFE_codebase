@@ -2,7 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from roi_align.roi_align import RoIAlign
+# from roi_align.roi_align import RoIAlign
+from torchvision.ops import RoIAlign
 
 from .backbone import build_backbone
 from .group_transformer import build_group_transformer
@@ -23,7 +24,8 @@ class GADTR(nn.Module):
 
         # RoI Align
         self.crop_size = args.crop_size
-        self.roi_align = RoIAlign(crop_height=self.crop_size, crop_width=self.crop_size)
+        # self.roi_align = RoIAlign(crop_height=self.crop_size, crop_width=self.crop_size)
+        self.roi_align = RoIAlign(output_size=(self.crop_size, self.crop_size), spatial_scale=1, sampling_ratio=-1)
         self.fc_emb = nn.Linear(self.crop_size*self.crop_size*self.backbone.num_channels, self.hidden_dim)
         self.drop_emb = nn.Dropout(p=args.drop_rate)
 
