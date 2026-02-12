@@ -25,9 +25,9 @@ parser = argparse.ArgumentParser(description='Group Activity Detection train cod
 parser.add_argument('--dataset', default='cafe', type=str, help='dataset name')
 parser.add_argument('--val_mode', action='store_true')
 parser.add_argument('--split', default='place', type=str, help='dataset split. place or view')
-parser.add_argument('--data_path', default='../Dataset/', type=str, help='data path')
-parser.add_argument('--image_width', default=1280, type=int, help='Image width to resize')
-parser.add_argument('--image_height', default=720, type=int, help='Image height to resize')
+parser.add_argument('--data_path', default='/media/jiqqi/OS/dataset/Cafe_Dataset/Dataset/', type=str, help='data path')
+parser.add_argument('--image_width', default=224, type=int, help='Image width to resize')
+parser.add_argument('--image_height', default=224, type=int, help='Image height to resize')
 parser.add_argument('--random_sampling', action='store_true', help='random sampling strategy')
 parser.add_argument('--num_frame', default=5, type=int, help='number of frames for each clip')
 parser.add_argument('--num_class', default=6, type=int, help='number of activity classes')
@@ -82,13 +82,15 @@ parser.add_argument('--device', default="0, 1", type=str, help='GPU device')
 parser.add_argument('--distributed', action='store_true')
 
 # Load model
-parser.add_argument('--model_path', default="", type=str, help='pretrained model path')
+parser.add_argument('--model_path',
+                    default="output_dir/cafe/epoch30.pth",
+                    type=str, help='pretrained model path')
 
 # Visualization
 parser.add_argument('--result_path', default="./outputs/")
 
 # Evaluation
-parser.add_argument('--groundtruth', default='./evaluation/gt_tracks.txt', type=argparse.FileType("r"))
+parser.add_argument('--groundtruth', default='/media/jiqqi/OS/dataset/Cafe_Dataset/evaluation/gt_tracks.txt', type=argparse.FileType("r"))
 parser.add_argument('--labelmap', default='./label_map/group_action_list.pbtxt', type=argparse.FileType("r"))
 parser.add_argument('--giou_thresh', default=1.0, type=float)
 parser.add_argument('--eval_type', default="gt_base", type=str, help='gt_based or detection_based')
@@ -160,6 +162,9 @@ def validate(test_loader, model, criterion, metrics):
     name_to_vid = {name: i + 1 for i, name in enumerate(SEQS_CAFE)}
     file_path = path + '/pred_group_test_%s.txt' % args.split
 
+    all_action_preds = []
+    all_action_gts = []
+
     for i, (images, targets, infos) in enumerate(metric_logger.log_every(test_loader, print_freq, header)):
         images = images.cuda()  # [B, T, 3, H, W]
         targets = [{k: v.cuda() for k, v in t.items()} for t in targets]
@@ -185,9 +190,23 @@ def validate(test_loader, model, criterion, metrics):
 
         metric_logger.update(group_class_error=loss_dict_reduced['group_class_error'])
 
+        # individual action evaluation
+        pred_action_logits = outputs['pred_actions']
+
+        for i, pred_action_logit in enumerate(pred_action_logits):
+            pred_action_logit = pred_action_logits[i]
+            action_gt = targets[i]['actions'].cpu().numpy()
+            pred_action = pred_action_logit.argmax(dim=-1).cpu().numpy()
+            all_action_preds.extend(pred_action)
+            all_action_gts.extend(action_gt)
+
         make_txt(boxes, infos, outputs, name_to_vid, file_path)
 
     # gather the stats from all processes
+    overall_idv_action_acc = (torch.as_tensor(all_action_preds) == torch.as_tensor(all_action_gts)).float().mean()
+    overall_idv_action_error = 100 - overall_idv_action_acc * 100
+    print('overall_idv_action_error: ', overall_idv_action_error)
+
     metric_logger.synchronize_between_processes()
     print("Averaged stats:", metric_logger)
 
