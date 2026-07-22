@@ -202,17 +202,36 @@ def validate(test_loader, model, criterion, metrics):
         # individual action evaluation
         pred_action_logits = outputs['pred_actions']
 
-        for i, pred_action_logit in enumerate(pred_action_logits):
-            pred_action_logit = pred_action_logits[i]
-            action_gt = targets[i]['actions'].cpu().numpy()
-            pred_action = pred_action_logit.argmax(dim=-1).cpu().numpy()
-            all_action_preds.extend(pred_action)
-            all_action_gts.extend(action_gt)
+        for batch_idx, pred_action_logit in enumerate(pred_action_logits):
+            # pred_action_logit: [num_boxes, num_classes]
+            # targets[batch_idx]['actions']: [1, num_boxes]
+            # Flatten both tensors before accumulating them.  Extending the old
+            # 2-D target array appended one [num_boxes] row per sample, whereas
+            # predictions were appended as individual scalars.
+            pred_action = pred_action_logit.argmax(dim=-1).reshape(-1)
+            action_gt = targets[batch_idx]['actions'].reshape(-1)
+
+            if pred_action.numel() != action_gt.numel():
+                raise ValueError(
+                    'Individual action prediction/target size mismatch: '
+                    f'{tuple(pred_action_logit.shape)} vs '
+                    f'{tuple(targets[batch_idx]["actions"].shape)}'
+                )
+
+            # Padded actor slots use num_class + 1 and have no corresponding
+            # output class, so they must not contribute to action accuracy.
+            valid_actor_mask = action_gt != args.num_class + 1
+            all_action_preds.extend(pred_action[valid_actor_mask].cpu().tolist())
+            all_action_gts.extend(action_gt[valid_actor_mask].cpu().tolist())
 
         make_txt(boxes, infos, outputs, name_to_vid, file_path)
 
     # gather the stats from all processes
-    overall_idv_action_acc = (torch.as_tensor(all_action_preds) == torch.as_tensor(all_action_gts)).float().mean()
+    if not all_action_gts:
+        raise RuntimeError('No valid actors were found while computing individual action accuracy')
+    overall_idv_action_acc = (
+        torch.as_tensor(all_action_preds) == torch.as_tensor(all_action_gts)
+    ).float().mean()
     overall_idv_action_error = 100 - overall_idv_action_acc * 100
     print('overall_idv_action_error: ', overall_idv_action_error)
 
