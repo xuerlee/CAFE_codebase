@@ -22,12 +22,18 @@ import evaluation.cafe_eval as evaluation
 parser = argparse.ArgumentParser(description='Group Activity Detection train code', add_help=False)
 
 # Dataset specification
-parser.add_argument('--dataset', default='cafe', type=str, help='dataset name')
+parser.add_argument('--dataset',
+                    default='cafe',
+                    # default='jrdb',
+                    type=str, help='dataset name')
 parser.add_argument('--val_mode', action='store_true')
 parser.add_argument('--split', default='place', type=str, help='dataset split. place or view')
-parser.add_argument('--data_path', default='/media/jiqqi/OS/dataset/Cafe_Dataset/Dataset/', type=str, help='data path')
-parser.add_argument('--image_width', default=224, type=int, help='Image width to resize')
-parser.add_argument('--image_height', default=224, type=int, help='Image height to resize')
+parser.add_argument('--data_path',
+                    default='/media/jiqqi/OS/dataset/Cafe_Dataset/Dataset/',
+                    # default='/media/jiqqi/新加卷/dataset/JRDB/train_images/images',
+                    type=str, help='data path')
+parser.add_argument('--image_width', default=1280, type=int, help='Image width to resize')
+parser.add_argument('--image_height', default=720, type=int, help='Image height to resize')
 parser.add_argument('--random_sampling', action='store_true', help='random sampling strategy')
 parser.add_argument('--num_frame', default=5, type=int, help='number of frames for each clip')
 parser.add_argument('--num_class', default=6, type=int, help='number of activity classes')
@@ -90,7 +96,10 @@ parser.add_argument('--model_path',
 parser.add_argument('--result_path', default="./outputs/")
 
 # Evaluation
-parser.add_argument('--groundtruth', default='/media/jiqqi/OS/dataset/Cafe_Dataset/evaluation/gt_tracks.txt', type=argparse.FileType("r"))
+parser.add_argument('--groundtruth',
+                    default='/media/jiqqi/OS/dataset/Cafe_Dataset/evaluation/gt_tracks.txt',
+                    # default='/media/jiqqi/新加卷/dataset/JRDB/train_images/labels/labels_2d',
+                    type=argparse.FileType("r"))
 parser.add_argument('--labelmap', default='./label_map/group_action_list.pbtxt', type=argparse.FileType("r"))
 parser.add_argument('--giou_thresh', default=1.0, type=float)
 parser.add_argument('--eval_type', default="gt_base", type=str, help='gt_based or detection_based')

@@ -9,3 +9,10 @@
 .idea/
 __pycache__/
 *.py[cod]
+output_dir/
+outputs/
+result/
+runs/
+cafe_checkpoints/cafe_place.pth
+cafe_checkpoints/cafe_view.pth
+.vscode/settings.json
