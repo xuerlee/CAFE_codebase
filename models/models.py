@@ -25,7 +25,12 @@ class GADTR(nn.Module):
         # RoI Align
         self.crop_size = args.crop_size
         # self.roi_align = RoIAlign(crop_height=self.crop_size, crop_width=self.crop_size)
-        self.roi_align = RoIAlign(output_size=(self.crop_size, self.crop_size), spatial_scale=1, sampling_ratio=-1)
+        self.roi_align = RoIAlign(
+                output_size=(self.crop_size, self.crop_size),
+                spatial_scale=1.0,
+                sampling_ratio=1,
+                aligned=True,
+                )
         self.fc_emb = nn.Linear(self.crop_size*self.crop_size*self.backbone.num_channels, self.hidden_dim)
         self.drop_emb = nn.Dropout(p=args.drop_rate)
 
