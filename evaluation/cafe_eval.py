@@ -336,13 +336,13 @@ def group_mAP_eval(gt_groups_ids, gt_groups_activity, pred_groups_ids, pred_grou
         npos = len(gt_groups)
 
         # sorts det_groups in descending order for g_score.
-        # pred_groups = sorted(pred_groups, key=lambda conf: conf[3], reverse=True)  # the sorted set is actually not using the score
+        pred_groups = sorted(pred_groups, key=lambda conf: conf[3], reverse=True)  # the sorted set is actually not using the score
 
-        pred_groups = sorted(
-                        pred_groups,
-                        key=lambda conf: float(np.mean(list(conf[3]))),
-                        reverse=True
-                    )
+        # pred_groups = sorted(
+        #                 pred_groups,
+        #                 key=lambda conf: float(np.mean(list(conf[3]))),
+        #                 reverse=True
+        #             )
         TP = np.zeros(len(pred_groups))
         FP = np.zeros(len(pred_groups))
 
