@@ -2,7 +2,7 @@
 from types import SimpleNamespace
 from evaluation import cafe_eval
 
-pred_path = "/home/jiqqi/code/decoding-human-association/runs_cafe/24_new_new_cafe_hidden256_enc6dec6_12queries_lossratio223_grpnllcost_bceloss_place_noflip/pred_group_test_place_score_5.txt"
+pred_path = "/home/jiqqi/code/decoding-human-association/runs_cafe/28_new_new_cafe_hidden256_enc6dec6_12queries_lossratio223_grpnllcost_bceloss_place_noflip_aligned_sepgrploss_nogradclip/pred_group_test_place_score_29.txt"
 gt_path = "/media/jiqqi/OS/dataset/Cafe_Dataset/evaluation/gt_tracks.txt"
 labelmap_path = "label_map/group_action_list.pbtxt"
 
