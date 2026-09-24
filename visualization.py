@@ -279,6 +279,69 @@ def _ground_truth_groups(target, valid_actor_mask):
     return person_ids, activity_labels
 
 
+def _prediction_groups(boxes, action_labels, activity_labels, membership,
+                       group_threshold):
+    """Apply the original CAFE prediction export semantics for rendering.
+
+    A person belongs to its highest-scoring group only when that membership is
+    above ``group_threshold``. Otherwise it is rendered as a singleton. Actors
+    assigned to a group token classified as Empty are omitted, matching
+    ``test.py::make_txt``.
+    """
+    membership_scores, assigned_groups = membership.max(dim=-1)
+    assigned_activities = activity_labels[assigned_groups]
+    empty_activity = len(ACTIVITY_NAMES) - 1
+    render_actor_ids = torch.where(assigned_activities != empty_activity)[0]
+
+    if render_actor_ids.numel() == 0:
+        return (
+            boxes[:0],
+            action_labels[:0],
+            [],
+            [],
+            [],
+            [],
+        )
+
+    rendered_boxes = boxes[render_actor_ids]
+    rendered_actions = action_labels[render_actor_ids]
+    rendered_group_ids = assigned_groups[render_actor_ids].clone()
+    rendered_scores = membership_scores[render_actor_ids]
+
+    # Use a different synthetic group id for every rejected membership so each
+    # rejected actor becomes an independent singleton, exactly as group_id=-1
+    # denotes an outlier in the original CAFE export.
+    rejected = rendered_scores <= group_threshold
+    rendered_group_ids[rejected] = (
+        len(activity_labels) + render_actor_ids[rejected]
+    )
+
+    group_bboxes, local_person_ids = merge_group_bboxes(
+        rendered_boxes, rendered_group_ids
+    )
+    unique_groups = torch.unique(rendered_group_ids)
+    rendered_activities = []
+    for group_id in unique_groups:
+        if group_id < len(activity_labels):
+            rendered_activities.append(activity_labels[group_id])
+        else:
+            rendered_activities.append(torch.tensor(-2))
+
+    # Color matching must use the original actor indices, while drawing uses
+    # indices local to the filtered prediction boxes.
+    original_person_ids = [
+        render_actor_ids[group_members] for group_members in local_person_ids
+    ]
+    return (
+        rendered_boxes,
+        rendered_actions,
+        group_bboxes,
+        local_person_ids,
+        rendered_activities,
+        original_person_ids,
+    )
+
+
 @torch.no_grad()
 def save_batch_visualizations(targets, infos, outputs, args):
     """Save prediction and ground-truth images for one inference batch."""
@@ -320,13 +383,18 @@ def save_batch_visualizations(targets, infos, outputs, args):
         boxes = _xywh_to_pixel_xyxy(gt_boxes, image_width, image_height)
 
         membership = memberships[batch_idx, :, valid_actor_mask].transpose(0, 1)
-        pred_group_ids = membership.argmax(dim=-1)
-        pred_group_bboxes, pred_person_ids = merge_group_bboxes(
-            boxes, pred_group_ids
-        )
-        unique_pred_groups = torch.unique(pred_group_ids)
-        pred_activity_labels = pred_activities[batch_idx, unique_pred_groups]
         pred_action_labels = pred_actions[batch_idx, valid_actor_mask]
+
+        prediction = _prediction_groups(
+            boxes,
+            pred_action_labels,
+            pred_activities[batch_idx],
+            membership,
+            args.group_threshold,
+        )
+        (pred_boxes, pred_action_labels, pred_group_bboxes,
+         pred_person_ids, pred_activity_labels,
+         pred_person_ids_for_matching) = prediction
 
         gt_person_ids, gt_activity_labels = _ground_truth_groups(
             target, valid_actor_mask
@@ -337,11 +405,11 @@ def save_batch_visualizations(targets, infos, outputs, args):
         gt_group_bboxes, gt_person_ids = merge_group_bboxes(boxes, gt_group_ids)
 
         pred_group_colors, gt_group_colors = _matched_group_colors(
-            pred_person_ids, gt_person_ids
+            pred_person_ids_for_matching, gt_person_ids
         )
 
         pred_img = draw_bboxes(
-            key_img, boxes, pred_action_labels, pred_group_bboxes,
+            key_img, pred_boxes, pred_action_labels, pred_group_bboxes,
             pred_person_ids, pred_activity_labels, pred_group_colors,
         )
         gt_img = draw_bboxes(
