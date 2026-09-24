@@ -16,3 +16,6 @@ runs/
 cafe_checkpoints/cafe_place.pth
 cafe_checkpoints/cafe_view.pth
 .vscode/settings.json
+readme.md
+.gitignore
+visualizations/

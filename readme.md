@@ -48,6 +48,26 @@ https://drive.google.com/file/d/1W_2gkzARCzSdK8Db4G4pkzN3GrJTYo8R/view?usp=drive
 
         sh scripts/test_cafe_place.sh
 
+## Generate qualitative visualizations
+
+The visualization follows the CAFE renderer in `decoding-human-association`:
+predictions and ground truth use the same group colours, nested person/group
+boxes, labels, and filenames. The ground-truth directory has a `_gt` suffix.
+
+- Café dataset (split by place)
+
+        sh scripts/visualize_cafe_place.sh
+
+- Café dataset (split by view)
+
+        sh scripts/visualize_cafe_view.sh
+
+You can also add the following options to a custom `test.py` command:
+
+        --visualize --visualization_path visualizations/my_run
+
+The renderer requires OpenCV (`pip install opencv-python`).
+
 ## Run train scripts
 
 - Café dataset (split by view)
