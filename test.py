@@ -27,7 +27,7 @@ parser.add_argument('--dataset',
                     # default='jrdb',
                     type=str, help='dataset name')
 parser.add_argument('--val_mode', action='store_true')
-parser.add_argument('--split', default='place', type=str, help='dataset split. place or view')
+parser.add_argument('--split', default='view', type=str, help='dataset split. place or view')
 parser.add_argument('--data_path',
                     default='/media/jiqqi/OS/dataset/Cafe_Dataset/Dataset/',
                     # default='/media/jiqqi/新加卷/dataset/JRDB/train_images/images',
@@ -80,8 +80,8 @@ parser.add_argument('--set_cost_membership', default=1, type=float,
 
 # Training parameters
 parser.add_argument('--random_seed', default=1, type=int, help='random seed for reproduction')
-parser.add_argument('--batch', default=16, type=int, help='Batch size')
-parser.add_argument('--test_batch', default=16, type=int, help='Test batch size')
+parser.add_argument('--batch', default=1, type=int, help='Batch size')
+parser.add_argument('--test_batch', default=1, type=int, help='Test batch size')
 parser.add_argument('--drop_rate', default=0.1, type=float, help='Dropout rate')
 # GPU
 parser.add_argument('--device', default="0, 1", type=str, help='GPU device')
@@ -94,6 +94,10 @@ parser.add_argument('--model_path',
 
 # Visualization
 parser.add_argument('--result_path', default="./outputs/")
+parser.add_argument('--visualize', default='True', action='store_true',
+                    help='save CAFE prediction and ground-truth visualizations')
+parser.add_argument('--visualization_path', default='./visualizations/cafe', type=str,
+                    help='prediction image directory; ground truth uses the _gt suffix')
 
 # Evaluation
 parser.add_argument('--groundtruth',
@@ -183,6 +187,10 @@ def validate(test_loader, model, criterion, metrics):
 
         # compute output
         outputs = model(images, boxes, dummy_mask)
+
+        if args.visualize:
+            from visualization import save_batch_visualizations
+            save_batch_visualizations(targets, infos, outputs, args)
 
         loss_dict = criterion(outputs, targets)
         weight_dict = criterion.weight_dict
