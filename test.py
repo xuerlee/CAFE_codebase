@@ -89,7 +89,8 @@ parser.add_argument('--distributed', action='store_true')
 
 # Load model
 parser.add_argument('--model_path',
-                    default="output_dir/cafe/epoch30.pth",
+                    # default="output_dir/cafe/epoch30.pth",
+                    default="cafe_checkpoints/cafe_view.pth",
                     type=str, help='pretrained model path')
 
 # Visualization
