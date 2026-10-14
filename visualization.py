@@ -281,39 +281,28 @@ def _ground_truth_groups(target, valid_actor_mask):
 
 def _prediction_groups(boxes, action_labels, activity_labels, membership,
                        group_threshold):
-    """Apply the original CAFE prediction export semantics for rendering.
-
-    A person belongs to its highest-scoring group only when that membership is
-    above ``group_threshold``. Otherwise it is rendered as a singleton. Actors
-    assigned to a group token classified as Empty are omitted, matching
-    ``test.py::make_txt``.
-    """
+    """Resolve CAFE outputs, then render outliers as decoding-style singletons."""
     membership_scores, assigned_groups = membership.max(dim=-1)
     assigned_activities = activity_labels[assigned_groups]
     empty_activity = len(ACTIVITY_NAMES) - 1
-    render_actor_ids = torch.where(assigned_activities != empty_activity)[0]
+    individual_action = len(ACTION_NAMES)
+    actor_ids = torch.arange(len(boxes))
 
-    if render_actor_ids.numel() == 0:
-        return (
-            boxes[:0],
-            action_labels[:0],
-            [],
-            [],
-            [],
-            [],
-        )
+    rendered_boxes = boxes
+    rendered_actions = action_labels
+    rendered_group_ids = assigned_groups.clone()
 
-    rendered_boxes = boxes[render_actor_ids]
-    rendered_actions = action_labels[render_actor_ids]
-    rendered_group_ids = assigned_groups[render_actor_ids].clone()
-    rendered_scores = membership_scores[render_actor_ids]
-
-    # Use a different synthetic group id for every rejected membership so each
-    # rejected actor becomes an independent singleton, exactly as group_id=-1
-    # denotes an outlier in the original CAFE export.
-    rejected = rendered_scores <= group_threshold
+    # An actor is an outlier when CAFE predicts the Individual action, rejects
+    # its membership by threshold, or assigns it to an Empty group token. Keep
+    # every outlier visible, but give each one a unique singleton group so the
+    # drawing is exactly decoding-human-association's `individual` style.
+    rejected = (
+        (action_labels == individual_action)
+        | (membership_scores <= group_threshold)
+        | (assigned_activities == empty_activity)
+    )
     rendered_group_ids[rejected] = (
-        len(activity_labels) + render_actor_ids[rejected]
+        len(activity_labels) + actor_ids[rejected]
     )
 
     group_bboxes, local_person_ids = merge_group_bboxes(
@@ -328,9 +317,9 @@ def _prediction_groups(boxes, action_labels, activity_labels, membership,
             rendered_activities.append(torch.tensor(-2))
 
     # Color matching must use the original actor indices, while drawing uses
-    # indices local to the filtered prediction boxes.
+    # local indices. All actors are retained here, so those indices coincide.
     original_person_ids = [
-        render_actor_ids[group_members] for group_members in local_person_ids
+        actor_ids[group_members] for group_members in local_person_ids
     ]
     return (
         rendered_boxes,
